@@ -44,3 +44,17 @@ def complete(db,r):
     db.execute('UPDATE nodes SET healthy=0 WHERE id=?',(r['id'],))
     db.execute('UPDATE drains SET status=? WHERE node=?',('complete',r['id']))
     return event(db,'complete',r['id'],'drained',{})
+def recover(db,r):
+    placement=one(db,'SELECT * FROM placements WHERE demand=? AND replica=?',(r['demand'],r['replica']))
+    node=one(db,'SELECT * FROM nodes WHERE id=?',(r['destination'],))
+    demand=one(db,'SELECT * FROM demands WHERE id=?',(r['demand'],))
+    if not placement or placement['status']!='at_risk':
+        return event(db,'recover',r['demand'],'not_at_risk',{})
+    if not node or not node['healthy'] or node['cpu']<demand['cpu']:
+        return event(db,'recover',r['demand'],'replacement_unavailable',{})
+    other_zones={x['zone'] for x in many(db,'SELECT n.zone FROM placements p JOIN nodes n ON n.id=p.node WHERE p.demand=? AND p.replica<>? AND p.status=?',(r['demand'],r['replica'],'active'))}
+    rule=one(db,'SELECT min_zones FROM zone_rules WHERE app=?',(demand['app'],))
+    if rule and len(other_zones)<rule['min_zones'] and node['zone'] in other_zones:
+        return event(db,'recover',r['demand'],'zone_conflict',{})
+    db.execute('UPDATE placements SET node=?,status=? WHERE demand=? AND replica=?',(r['destination'],'active',r['demand'],r['replica']))
+    return event(db,'recover',r['demand'],'restored',{'replica':r['replica'],'node':r['destination']})
