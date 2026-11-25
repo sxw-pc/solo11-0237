@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS forecasts(app TEXT,version INTEGER,peak INTEGER,obser
 CREATE TABLE IF NOT EXISTS releases(demand TEXT PRIMARY KEY,at INTEGER,reason TEXT);
 CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,cpu INTEGER,ready INTEGER,healthy INTEGER);
 CREATE TABLE IF NOT EXISTS provisions(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,requested INTEGER,deadline INTEGER,status TEXT);
+CREATE TABLE IF NOT EXISTS machine_types(kind TEXT PRIMARY KEY,cpu INTEGER,warmup INTEGER,cost INTEGER);
 CREATE TABLE IF NOT EXISTS placements(demand TEXT,node TEXT,replica INTEGER,status TEXT,PRIMARY KEY(demand,replica));
 CREATE TABLE IF NOT EXISTS drains(node TEXT PRIMARY KEY,generation INTEGER,status TEXT);
 CREATE TABLE IF NOT EXISTS drain_moves(node TEXT,generation INTEGER,demand TEXT,replica INTEGER,destination TEXT,PRIMARY KEY(node,generation,demand,replica));

@@ -1,10 +1,19 @@
 from .store import one,many,event
+def catalog(db,r):
+    if min(r['cpu'],r['warmup'],r['cost'])<=0:return event(db,'catalog',r['kind'],'invalid_machine',{})
+    db.execute('INSERT OR REPLACE INTO machine_types VALUES(?,?,?,?)',(r['kind'],r['cpu'],r['warmup'],r['cost']))
+    return event(db,'catalog',r['kind'],'available',{'cpu':r['cpu'],'cost':r['cost']})
 def plan(db,r):
+    choices=many(db,'SELECT * FROM machine_types WHERE cpu>=? AND warmup+?<=? ORDER BY cost,kind',(r.get('cpu',1),r['requested'],r['deadline']))
+    kind=r['kind']
+    if kind=='auto':
+        if not choices:return event(db,'plan',r['id'],'no_eligible_machine',{})
+        kind=choices[0]['kind']
     if r['requested']>=r['deadline']:return event(db,'plan',r['id'],'warmup_too_late',{})
     if one(db,'SELECT * FROM provisions WHERE id=?',(r['id'],)):
         return event(db,'plan',r['id'],'idempotent',{})
-    db.execute('INSERT INTO provisions VALUES(?,?,?,?,?,?)',(r['id'],r['kind'],r['zone'],r['requested'],r['deadline'],'pending'))
-    return event(db,'plan',r['id'],'planned',{})
+    db.execute('INSERT INTO provisions VALUES(?,?,?,?,?,?)',(r['id'],kind,r['zone'],r['requested'],r['deadline'],'pending'))
+    return event(db,'plan',r['id'],'planned',{'kind':kind})
 def ready(db,r):
     plan=one(db,'SELECT * FROM provisions WHERE id=?',(r['plan'],))
     if not plan:return event(db,'ready',r['id'],'missing_plan',{})

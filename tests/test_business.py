@@ -24,6 +24,11 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.act('node.plan',id='p',kind='cpu',zone='a',requested=1,deadline=9),'planned')
         self.assertEqual(self.act('node.ready',id='n',plan='p',kind='cpu',zone='a',cpu=8,at=5,healthy=False),'failed_warmup')
         self.node();self.assertEqual(self.act('node.fail',id='n'),'isolated')
+    def test_machine_selection_uses_cost_and_warmup(self):
+        self.act('node.catalog',kind='slow',cpu=8,warmup=12,cost=1)
+        self.act('node.catalog',kind='fast',cpu=8,warmup=3,cost=3)
+        self.assertEqual(self.act('node.plan',id='auto',kind='auto',zone='a',requested=1,deadline=10,cpu=4),'planned')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT kind FROM provisions WHERE id=?',('auto',))['kind'],'fast')
     def test_zone_placement_and_drain(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1)
         self.node('n1','a');self.node('n2','a');self.node('n3','b');self.demand()
