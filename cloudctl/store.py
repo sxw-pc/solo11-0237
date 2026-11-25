@@ -5,6 +5,7 @@ PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS demands(id TEXT PRIMARY KEY,app TEXT,start INTEGER,end INTEGER,minimum INTEGER,burst INTEGER,cpu INTEGER,version INTEGER,status TEXT);
 CREATE TABLE IF NOT EXISTS commitments(demand TEXT PRIMARY KEY,units INTEGER,forecast_version INTEGER,status TEXT);
 CREATE TABLE IF NOT EXISTS forecasts(app TEXT,version INTEGER,peak INTEGER,observed INTEGER,PRIMARY KEY(app,version));
+CREATE TABLE IF NOT EXISTS proposal_forecast(demand TEXT PRIMARY KEY,forecast_version INTEGER,units INTEGER,assessed INTEGER);
 CREATE TABLE IF NOT EXISTS releases(demand TEXT PRIMARY KEY,at INTEGER,reason TEXT);
 CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,cpu INTEGER,ready INTEGER,healthy INTEGER);
 CREATE TABLE IF NOT EXISTS provisions(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,requested INTEGER,deadline INTEGER,status TEXT);

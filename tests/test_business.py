@@ -29,6 +29,8 @@ class CapacityTests(unittest.TestCase):
         self.act('node.catalog',kind='fast',cpu=8,warmup=3,cost=3)
         self.assertEqual(self.act('node.plan',id='auto',kind='auto',zone='a',requested=1,deadline=10,cpu=4),'planned')
         with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT kind FROM provisions WHERE id=?',('auto',))['kind'],'fast')
+        self.assertEqual(self.act('node.ready',id='early',plan='auto',kind='fast',zone='a',cpu=8,at=2,healthy=True),'warmup_or_capacity_unverified')
+        self.assertEqual(self.act('node.ready',id='ready',plan='auto',kind='fast',zone='a',cpu=8,at=4,healthy=True),'available')
     def test_zone_placement_and_drain(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1)
         self.node('n1','a');self.node('n2','a');self.node('n3','b');self.demand()
@@ -68,8 +70,27 @@ class CapacityTests(unittest.TestCase):
     def test_release_frees_overlapping_commitment(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node()
         self.assertEqual(self.demand(),'committed')
-        self.assertEqual(self.demand('other'),'committed')
+        self.assertEqual(self.demand('other'),'capacity_shortfall')
         self.assertEqual(self.demand('third'),'capacity_shortfall')
         self.act('demand.release',id='d',at=12,reason='terminated')
         self.assertEqual(self.demand('third'),'committed')
+    def test_node_usage_blocks_unsafe_colocation_and_drain(self):
+        self.act('demand.forecast',app='app',version=1,peak=1,at=1)
+        self.act('node.register',id='source',kind='cpu',zone='a',cpu=8,ready=0,healthy=True)
+        self.act('node.register',id='target',kind='cpu',zone='b',cpu=2,ready=0,healthy=True)
+        for name in ('one','two'):
+            self.assertEqual(self.act('demand.commit',id=name,app='app',start=10,end=20,minimum=1,burst=1,cpu=2),'committed')
+            self.assertEqual(self.act('capacity.place',demand=name,node='source',replica=1),'placed')
+        self.assertEqual(self.act('capacity.drain',id='source'),'blocked_placement')
+        self.assertEqual(self.act('capacity.place',demand='one',node='target',replica=2),'already_satisfied')
+    def test_forecast_reassesses_only_unactivated_proposals(self):
+        self.act('demand.forecast',app='app',version=1,peak=2,at=1)
+        self.node()
+        self.assertEqual(self.act('demand.propose',id='draft',app='app',start=10,end=20,minimum=1,burst=3,cpu=2,at=2),'proposed')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT units FROM proposal_forecast WHERE demand=?',('draft',))['units'],2)
+        self.act('demand.forecast',app='app',version=2,peak=3,at=3)
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT units,forecast_version FROM proposal_forecast WHERE demand=?',('draft',))['units'],3)
+        self.assertEqual(self.act('demand.activate',id='draft'),'committed')
+        self.act('demand.forecast',app='app',version=3,peak=1,at=4)
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT units,forecast_version FROM commitments WHERE demand=?',('draft',))['forecast_version'],2)
 if __name__=='__main__':unittest.main()
