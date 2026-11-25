@@ -48,11 +48,22 @@ def complete(db,r):
         db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
         return event(db,'complete',r['id'],'rolled_back',{})
     moves=many(db,'SELECT demand,replica,destination FROM drain_moves WHERE node=? AND generation=?',(r['id'],r['generation']))
+    incoming={}
     for move in moves:
         dest=one(db,'SELECT * FROM nodes WHERE id=?',(move['destination'],))
         if not dest or not dest['healthy']:
             db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
             return event(db,'complete',r['id'],'replacement_failed',{'destination':move['destination']})
+        original=one(db,'SELECT status FROM placements WHERE demand=? AND replica=? AND node=?',(move['demand'],move['replica'],r['id']))
+        if not original or original['status']!='active':
+            db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
+            return event(db,'complete',r['id'],'source_changed',{'demand':move['demand']})
+        demand=one(db,'SELECT cpu FROM demands WHERE id=?',(move['demand'],))
+        incoming[dest['id']]=incoming.get(dest['id'],0)+demand['cpu']
+        used=one(db,'SELECT COALESCE(SUM(d.cpu),0) n FROM placements p JOIN demands d ON d.id=p.demand WHERE p.node=? AND p.status=?',(dest['id'],'active'))['n']
+        if used+incoming[dest['id']]>dest['cpu']:
+            db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
+            return event(db,'complete',r['id'],'replacement_capacity_exhausted',{'destination':dest['id'],'used':used,'incoming':incoming[dest['id']]})
     for move in moves:
         db.execute('UPDATE placements SET node=? WHERE demand=? AND replica=? AND node=?',(move['destination'],move['demand'],move['replica'],r['id']))
     db.execute('UPDATE nodes SET healthy=0 WHERE id=?',(r['id'],))
