@@ -33,8 +33,10 @@ def activate(db,r):
     db.execute('UPDATE demands SET status=?,version=version+1 WHERE id=?',('committed',d['id']))
     return event(db,'activate',r['id'],'committed',{'forecast_version':proposal['forecast_version'],'units':proposal['units']})
 def commit(db,r):
-    if one(db,'SELECT * FROM demands WHERE id=?',(r['id'],)):
-        return event(db,'commit',r['id'],'idempotent',{})
+    old=one(db,'SELECT * FROM demands WHERE id=?',(r['id'],))
+    if old:
+        same=all(old[key]==r[key] for key in ('app','start','end','minimum','burst','cpu'))
+        return event(db,'commit',r['id'],'idempotent' if same else 'contract_conflict',{})
     if r['start']>=r['end'] or r['minimum']>r['burst'] or r['minimum']<1:
         return event(db,'commit',r['id'],'invalid_contract',{})
     latest=one(db,'SELECT version,peak FROM forecasts WHERE app=? ORDER BY version DESC LIMIT 1',(r['app'],))
@@ -60,4 +62,5 @@ def release(db,r):
     db.execute('INSERT INTO releases VALUES(?,?,?)',(r['id'],r['at'],r['reason']))
     db.execute('UPDATE demands SET status=? WHERE id=?',('terminated',r['id']))
     db.execute('UPDATE commitments SET status=? WHERE demand=?',('released',r['id']))
+    db.execute('UPDATE placements SET status=? WHERE demand=? AND status=?',('released',r['id'],'active'))
     return event(db,'release',r['id'],'released',{'provision_plans_retained':True})

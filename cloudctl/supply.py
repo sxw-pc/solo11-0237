@@ -17,6 +17,7 @@ def plan(db,r):
 def ready(db,r):
     plan=one(db,'SELECT * FROM provisions WHERE id=?',(r['plan'],))
     if not plan:return event(db,'ready',r['id'],'missing_plan',{})
+    if plan['status']!='pending':return event(db,'ready',r['id'],'plan_not_pending',{'status':plan['status']})
     machine=one(db,'SELECT * FROM machine_types WHERE kind=?',(plan['kind'],))
     if machine and (r['at']<plan['requested']+machine['warmup'] or r['cpu']<machine['cpu']):
         return event(db,'ready',r['id'],'warmup_or_capacity_unverified',{'earliest':plan['requested']+machine['warmup']})

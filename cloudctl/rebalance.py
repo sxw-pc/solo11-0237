@@ -42,12 +42,17 @@ def drain(db,r):
     return event(db,'drain',r['id'],'planned',{'generation':generation,'moves':planned})
 def complete(db,r):
     drain=one(db,'SELECT * FROM drains WHERE node=?',(r['id'],))
-    if not drain or drain['generation']!=r['generation']:
+    if not drain or drain['generation']!=r['generation'] or drain['status']!='planned':
         return event(db,'complete',r['id'],'stale_plan',{})
     if not r['success']:
         db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
         return event(db,'complete',r['id'],'rolled_back',{})
     moves=many(db,'SELECT demand,replica,destination FROM drain_moves WHERE node=? AND generation=?',(r['id'],r['generation']))
+    for move in moves:
+        dest=one(db,'SELECT * FROM nodes WHERE id=?',(move['destination'],))
+        if not dest or not dest['healthy']:
+            db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
+            return event(db,'complete',r['id'],'replacement_failed',{'destination':move['destination']})
     for move in moves:
         db.execute('UPDATE placements SET node=? WHERE demand=? AND replica=? AND node=?',(move['destination'],move['demand'],move['replica'],r['id']))
     db.execute('UPDATE nodes SET healthy=0 WHERE id=?',(r['id'],))
@@ -57,6 +62,8 @@ def recover(db,r):
     placement=one(db,'SELECT * FROM placements WHERE demand=? AND replica=?',(r['demand'],r['replica']))
     node=one(db,'SELECT * FROM nodes WHERE id=?',(r['destination'],))
     demand=one(db,'SELECT * FROM demands WHERE id=?',(r['demand'],))
+    if not demand or demand['status']!='committed':
+        return event(db,'recover',r['demand'],'demand_inactive',{})
     if not placement or placement['status']!='at_risk':
         return event(db,'recover',r['demand'],'not_at_risk',{})
     if not node or not node['healthy'] or node['cpu']<demand['cpu']:

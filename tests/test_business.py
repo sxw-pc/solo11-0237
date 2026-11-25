@@ -17,6 +17,7 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.act('demand.forecast',app='app',version=1,peak=4,at=1),'recorded')
         self.assertEqual(self.demand(),'capacity_shortfall')
         self.node();self.assertEqual(self.demand(),'committed')
+        self.assertEqual(self.act('demand.commit',id='d',app='app',start=10,end=20,minimum=2,burst=3,cpu=4),'contract_conflict')
         self.assertEqual(self.act('demand.forecast',app='app',version=2,peak=5,at=2),'recorded')
         with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT forecast_version FROM commitments WHERE demand=?',('d',))['forecast_version'],1)
     def test_supply_warmup_and_failure(self):
@@ -40,6 +41,7 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.act('capacity.place',demand='d',node='n3',replica=2),'placed')
         self.assertEqual(self.act('capacity.drain',id='n1'),'planned')
         self.assertEqual(self.act('capacity.complete',id='n1',generation=1,success=False),'rolled_back')
+        self.assertEqual(self.act('capacity.complete',id='n1',generation=1,success=True),'stale_plan')
         with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT node FROM placements WHERE demand=? AND replica=?',('d',1))['node'],'n1')
         self.assertEqual(self.act('capacity.drain',id='n1'),'planned')
         self.assertEqual(self.act('capacity.complete',id='n1',generation=2,success=True),'drained')
@@ -48,6 +50,16 @@ class CapacityTests(unittest.TestCase):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node();self.demand()
         self.assertEqual(self.act('demand.release',id='d',at=15,reason='shutdown'),'released')
         self.assertEqual(self.act('demand.release',id='d',at=16,reason='shutdown'),'idempotent')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT status FROM commitments WHERE demand=?',('d',))['status'],'released')
+    def test_drain_rechecks_replacement_health_before_commit(self):
+        self.act('demand.forecast',app='app',version=1,peak=1,at=1)
+        self.node('source','a');self.node('target','b')
+        self.act('demand.commit',id='d',app='app',start=10,end=20,minimum=1,burst=1,cpu=2)
+        self.act('capacity.place',demand='d',node='source',replica=1)
+        self.assertEqual(self.act('capacity.drain',id='source'),'planned')
+        self.act('node.fail',id='target')
+        self.assertEqual(self.act('capacity.complete',id='source',generation=1,success=True),'replacement_failed')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT node FROM placements WHERE demand=?',('d',))['node'],'source')
     def test_capacity_gap_reason_changes_with_warmup(self):
         self.assertEqual(self.act('demand.gap',app='app',start=10,end=20,units=2,cpu=2),'total_capacity')
         self.act('node.register',id='warm',kind='cpu',zone='a',cpu=8,ready=15,healthy=True)
