@@ -7,6 +7,8 @@ def place(db,r):
     demand=one(db,'SELECT * FROM demands WHERE id=?',(r['demand'],));node=one(db,'SELECT * FROM nodes WHERE id=?',(r['node'],))
     if not demand or demand['status']!='committed' or not node or not node['healthy']:
         return event(db,'place',r['demand'],'unavailable',{})
+    if node['ready']>demand['start']:
+        return event(db,'place',r['demand'],'node_not_ready_for_start',{'ready':node['ready'],'start':demand['start']})
     existing=many(db,'SELECT p.node,n.zone FROM placements p JOIN nodes n ON n.id=p.node WHERE p.demand=? AND p.status=?',(r['demand'],'active'))
     rule=one(db,'SELECT min_zones FROM zone_rules WHERE app=?',(demand['app'],))
     if rule and len(existing)<rule['min_zones'] and node['zone'] in [x['zone'] for x in existing]:
@@ -29,6 +31,7 @@ def drain(db,r):
         other_zones={x['zone'] for x in many(db,'SELECT n.zone FROM placements p JOIN nodes n ON n.id=p.node WHERE p.demand=? AND p.replica<>? AND p.status=?',(d['id'],p['replica'],'active'))}
         candidates=[]
         for n in alternatives:
+            if n['ready']>d['start']:continue
             used=one(db,'SELECT COALESCE(SUM(d.cpu),0) n FROM placements p JOIN demands d ON d.id=p.demand WHERE p.node=? AND p.status=?',(n['id'],'active'))['n']
             if used+reserved.get(n['id'],0)+d['cpu']>n['cpu']:continue
             if rule and len(other_zones)<rule['min_zones'] and n['zone'] in other_zones:continue
@@ -59,6 +62,10 @@ def complete(db,r):
             db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
             return event(db,'complete',r['id'],'source_changed',{'demand':move['demand']})
         demand=one(db,'SELECT cpu FROM demands WHERE id=?',(move['demand'],))
+        start=one(db,'SELECT start FROM demands WHERE id=?',(move['demand'],))['start']
+        if dest['ready']>start:
+            db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
+            return event(db,'complete',r['id'],'replacement_not_ready_for_start',{'destination':dest['id'],'ready':dest['ready'],'start':start})
         incoming[dest['id']]=incoming.get(dest['id'],0)+demand['cpu']
         used=one(db,'SELECT COALESCE(SUM(d.cpu),0) n FROM placements p JOIN demands d ON d.id=p.demand WHERE p.node=? AND p.status=?',(dest['id'],'active'))['n']
         if used+incoming[dest['id']]>dest['cpu']:
@@ -79,6 +86,8 @@ def recover(db,r):
         return event(db,'recover',r['demand'],'not_at_risk',{})
     if not node or not node['healthy'] or node['cpu']<demand['cpu']:
         return event(db,'recover',r['demand'],'replacement_unavailable',{})
+    if node['ready']>demand['start']:
+        return event(db,'recover',r['demand'],'replacement_not_ready_for_start',{'ready':node['ready'],'start':demand['start']})
     used=one(db,'SELECT COALESCE(SUM(d.cpu),0) n FROM placements p JOIN demands d ON d.id=p.demand WHERE p.node=? AND p.status=?',(r['destination'],'active'))['n']
     if used+demand['cpu']>node['cpu']:
         return event(db,'recover',r['demand'],'replacement_capacity_exhausted',{'used':used})

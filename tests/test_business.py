@@ -92,6 +92,17 @@ class CapacityTests(unittest.TestCase):
         self.node('n2','b')
         self.assertEqual(self.act('capacity.recover',demand='d',replica=1,destination='n2'),'restored')
         self.assertEqual(self.act('demand.audit',id='d'),'underplaced')
+    def test_placement_and_recovery_respect_start_warmup(self):
+        self.act('demand.forecast',app='app',version=1,peak=1,at=1)
+        self.act('node.register',id='source',kind='cpu',zone='a',cpu=8,ready=0,healthy=True)
+        self.act('node.register',id='warm',kind='cpu',zone='b',cpu=8,ready=15,healthy=True)
+        self.assertEqual(self.act('demand.commit',id='d',app='app',start=10,end=20,minimum=1,burst=1,cpu=2),'committed')
+        self.assertEqual(self.act('capacity.place',demand='d',node='warm',replica=1),'node_not_ready_for_start')
+        self.assertEqual(self.act('capacity.place',demand='d',node='source',replica=1),'placed')
+        self.assertEqual(self.act('capacity.drain',id='source'),'blocked_placement')
+        self.act('node.fail',id='source')
+        self.assertEqual(self.act('capacity.recover',demand='d',replica=1,destination='warm'),'replacement_not_ready_for_start')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT node,status FROM placements WHERE demand=?',('d',))['status'],'at_risk')
     def test_release_frees_overlapping_commitment(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node()
         self.assertEqual(self.demand(),'committed')
