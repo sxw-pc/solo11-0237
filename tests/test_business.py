@@ -46,4 +46,10 @@ class CapacityTests(unittest.TestCase):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node();self.demand()
         self.assertEqual(self.act('demand.release',id='d',at=15,reason='shutdown'),'released')
         self.assertEqual(self.act('demand.release',id='d',at=16,reason='shutdown'),'idempotent')
+    def test_capacity_gap_reason_changes_with_warmup(self):
+        self.assertEqual(self.act('demand.gap',app='app',start=10,end=20,units=2,cpu=2),'total_capacity')
+        self.act('node.register',id='warm',kind='cpu',zone='a',cpu=8,ready=15,healthy=True)
+        self.assertEqual(self.act('demand.gap',app='app',start=10,end=20,units=2,cpu=2),'warmup')
+        self.node()
+        self.assertEqual(self.act('demand.gap',app='app',start=10,end=20,units=2,cpu=2),'none')
 if __name__=='__main__':unittest.main()
