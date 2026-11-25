@@ -1,0 +1,10 @@
+[
+{"action":"demand.forecast","app":"app","version":1,"peak":4,"at":1},
+{"action":"node.register","id":"n1","kind":"cpu","zone":"a","cpu":8,"ready":0,"healthy":true},
+{"action":"node.register","id":"n2","kind":"cpu","zone":"b","cpu":8,"ready":0,"healthy":true},
+{"action":"demand.commit","id":"d1","app":"app","start":10,"end":20,"minimum":2,"burst":3,"cpu":2},
+{"action":"capacity.zone_rule","app":"app","min_zones":2},
+{"action":"capacity.place","demand":"d1","node":"n1","replica":1},
+{"action":"capacity.place","demand":"d1","node":"n2","replica":2},
+{"action":"capacity.drain","id":"n1"}
+]
