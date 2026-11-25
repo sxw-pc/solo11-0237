@@ -1,6 +1,6 @@
 import argparse,json,sys
-from . import store,demand,supply,rebalance
-OPS={'demand.forecast':demand.forecast,'demand.commit':demand.commit,'demand.gap':demand.gap,'demand.release':demand.release,'node.catalog':supply.catalog,'node.plan':supply.plan,'node.ready':supply.ready,'node.register':supply.register,'node.fail':supply.fail,'capacity.zone_rule':rebalance.zone_rule,'capacity.place':rebalance.place,'capacity.drain':rebalance.drain,'capacity.complete':rebalance.complete,'capacity.recover':rebalance.recover}
+from . import store,demand,supply,rebalance,audit
+OPS={'demand.forecast':demand.forecast,'demand.commit':demand.commit,'demand.gap':demand.gap,'demand.release':demand.release,'demand.audit':audit.inspect,'node.catalog':supply.catalog,'node.plan':supply.plan,'node.ready':supply.ready,'node.register':supply.register,'node.fail':supply.fail,'capacity.zone_rule':rebalance.zone_rule,'capacity.place':rebalance.place,'capacity.drain':rebalance.drain,'capacity.complete':rebalance.complete,'capacity.recover':rebalance.recover}
 def execute(path,r):
     with store.tx(path) as db:
         if r['action'] not in OPS:raise ValueError('unknown action')

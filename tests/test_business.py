@@ -64,6 +64,7 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.act('capacity.recover',demand='d',replica=1,destination='missing'),'replacement_unavailable')
         self.node('n2','b')
         self.assertEqual(self.act('capacity.recover',demand='d',replica=1,destination='n2'),'restored')
+        self.assertEqual(self.act('demand.audit',id='d'),'underplaced')
     def test_release_frees_overlapping_commitment(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node()
         self.assertEqual(self.demand(),'committed')
