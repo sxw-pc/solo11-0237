@@ -33,6 +33,10 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(self.act('capacity.place',demand='d',node='n3',replica=2),'placed')
         self.assertEqual(self.act('capacity.drain',id='n1'),'planned')
         self.assertEqual(self.act('capacity.complete',id='n1',generation=1,success=False),'rolled_back')
+        with store.tx(self.db) as db:self.assertEqual(store.one(db,'SELECT node FROM placements WHERE demand=? AND replica=?',('d',1))['node'],'n1')
+        self.assertEqual(self.act('capacity.drain',id='n1'),'planned')
+        self.assertEqual(self.act('capacity.complete',id='n1',generation=2,success=True),'drained')
+        with store.tx(self.db) as db:self.assertNotEqual(store.one(db,'SELECT node FROM placements WHERE demand=? AND replica=?',('d',1))['node'],'n1')
     def test_termination_release(self):
         self.act('demand.forecast',app='app',version=1,peak=4,at=1);self.node();self.demand()
         self.assertEqual(self.act('demand.release',id='d',at=15,reason='shutdown'),'released')

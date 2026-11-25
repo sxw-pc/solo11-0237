@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS nodes(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,cpu INT
 CREATE TABLE IF NOT EXISTS provisions(id TEXT PRIMARY KEY,kind TEXT,zone TEXT,requested INTEGER,deadline INTEGER,status TEXT);
 CREATE TABLE IF NOT EXISTS placements(demand TEXT,node TEXT,replica INTEGER,status TEXT,PRIMARY KEY(demand,replica));
 CREATE TABLE IF NOT EXISTS drains(node TEXT PRIMARY KEY,generation INTEGER,status TEXT);
+CREATE TABLE IF NOT EXISTS drain_moves(node TEXT,generation INTEGER,demand TEXT,replica INTEGER,destination TEXT,PRIMARY KEY(node,generation,demand,replica));
 CREATE TABLE IF NOT EXISTS zone_rules(app TEXT PRIMARY KEY,min_zones INTEGER);
 CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT,subject TEXT,decision TEXT,evidence TEXT);
 """

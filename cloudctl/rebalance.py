@@ -18,13 +18,19 @@ def drain(db,r):
     node=one(db,'SELECT * FROM nodes WHERE id=?',(r['id'],))
     if not node:return event(db,'drain',r['id'],'missing',{})
     hosted=many(db,'SELECT * FROM placements WHERE node=? AND status=?',(r['id'],'active'))
+    planned=[]
     for p in hosted:
         d=one(db,'SELECT * FROM demands WHERE id=?',(p['demand'],))
-        alternatives=many(db,'SELECT * FROM nodes WHERE id<>? AND healthy=1 AND cpu>=?',(r['id'],d['cpu']))
-        if not alternatives:return event(db,'drain',r['id'],'blocked_placement',{'demand':d['id']})
+        alternatives=many(db,'SELECT * FROM nodes WHERE id<>? AND healthy=1 AND cpu>=? ORDER BY id',(r['id'],d['cpu']))
+        rule=one(db,'SELECT min_zones FROM zone_rules WHERE app=?',(d['app'],))
+        other_zones={x['zone'] for x in many(db,'SELECT n.zone FROM placements p JOIN nodes n ON n.id=p.node WHERE p.demand=? AND p.replica<>? AND p.status=?',(d['id'],p['replica'],'active'))}
+        candidates=[n for n in alternatives if not rule or len(other_zones)>=rule['min_zones'] or n['zone'] not in other_zones]
+        if not candidates:return event(db,'drain',r['id'],'blocked_placement',{'demand':d['id'],'replica':p['replica']})
+        planned.append((d['id'],p['replica'],candidates[0]['id']))
     generation=(one(db,'SELECT generation FROM drains WHERE node=?',(r['id'],)) or {}).get('generation',0)+1
     db.execute('INSERT OR REPLACE INTO drains VALUES(?,?,?)',(r['id'],generation,'planned'))
-    return event(db,'drain',r['id'],'planned',{'generation':generation,'count':len(hosted)})
+    db.executemany('INSERT INTO drain_moves VALUES(?,?,?,?,?)',[(r['id'],generation,*move) for move in planned])
+    return event(db,'drain',r['id'],'planned',{'generation':generation,'moves':planned})
 def complete(db,r):
     drain=one(db,'SELECT * FROM drains WHERE node=?',(r['id'],))
     if not drain or drain['generation']!=r['generation']:
@@ -32,7 +38,9 @@ def complete(db,r):
     if not r['success']:
         db.execute('UPDATE drains SET status=? WHERE node=?',('rolled_back',r['id']))
         return event(db,'complete',r['id'],'rolled_back',{})
-    db.execute('UPDATE placements SET status=? WHERE node=?',('migrated',r['id']))
+    moves=many(db,'SELECT demand,replica,destination FROM drain_moves WHERE node=? AND generation=?',(r['id'],r['generation']))
+    for move in moves:
+        db.execute('UPDATE placements SET node=? WHERE demand=? AND replica=? AND node=?',(move['destination'],move['demand'],move['replica'],r['id']))
     db.execute('UPDATE nodes SET healthy=0 WHERE id=?',(r['id'],))
     db.execute('UPDATE drains SET status=? WHERE node=?',('complete',r['id']))
     return event(db,'complete',r['id'],'drained',{})
