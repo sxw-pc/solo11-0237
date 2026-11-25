@@ -1,0 +1,1 @@
+{"action":"demand.commit","id":"entry-demand","app":"app","start":10,"end":20,"minimum":2,"burst":3,"cpu":2,"setup":[{"action":"demand.forecast","app":"app","version":1,"peak":4,"at":1},{"action":"node.register","id":"entry-node","kind":"cpu","zone":"a","cpu":8,"ready":0,"healthy":true}]}

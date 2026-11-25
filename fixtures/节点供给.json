@@ -1,0 +1,1 @@
+{"action":"node.plan","id":"entry-plan","kind":"auto","zone":"a","requested":1,"deadline":10,"cpu":4,"setup":[{"action":"node.catalog","kind":"cpu","cpu":8,"warmup":3,"cost":2}]}

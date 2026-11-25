@@ -1,0 +1,1 @@
+{"action":"node.plan","id":"p","kind":"cpu","zone":"a","requested":10,"deadline":5}
