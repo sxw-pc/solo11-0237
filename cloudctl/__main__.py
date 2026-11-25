@@ -6,12 +6,13 @@ def execute(path,r):
         if r['action'] not in OPS:raise ValueError('unknown action')
         return OPS[r['action']](db,r)
 def main():
-    p=argparse.ArgumentParser();p.add_argument('command',choices=['init','demo','demand','node','capacity']);p.add_argument('--db',default='state.sqlite');p.add_argument('--fixture');a=p.parse_args();store.init(a.db)
+    p=argparse.ArgumentParser();p.add_argument('command',choices=['init','demo','demand','node','capacity']);p.add_argument('operation',nargs='?');p.add_argument('--db',default='state.sqlite');p.add_argument('--fixture');a=p.parse_args();store.init(a.db)
     if a.command=='init':print(json.dumps({'status':'initialized'}));return
     if not a.fixture and a.command!='demo':p.error('--fixture required')
     requests=json.load(open(a.fixture or 'fixtures/demo.json',encoding='utf-8'))
     for r in requests if isinstance(requests,list) else [requests]:
         if a.command!='demo' and r['action'].split('.')[0]!=a.command:raise ValueError('wrong subsystem command')
+        for prerequisite in r.get('setup',[]):execute(a.db,prerequisite)
         print(json.dumps(execute(a.db,r),ensure_ascii=False))
 if __name__=='__main__':
     try:main()
