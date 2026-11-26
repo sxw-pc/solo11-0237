@@ -1,0 +1,38 @@
+{
+  "incident_id": "P1-mains-loss-diesel-transfer",
+  "bus": "P1",
+  "note": "固定事故原件，按实际到达次序排列。tick=数据所描述的分钟，received_at=实际送达分钟。",
+  "messages": [
+    {"kind": "page", "page_id": "grid-normal-t12-LATE", "received_at": 13, "rows": [
+      {"bus": "P1", "source": "grid", "tick": 12, "voltage": 230, "available_kw": 10}
+    ]},
+    {"kind": "page", "page_id": "grid-dead-t13", "received_at": 13, "rows": [
+      {"bus": "P1", "source": "grid", "tick": 13, "voltage": 0, "available_kw": 0}
+    ]},
+    {"kind": "page", "page_id": "gen-noload-t13", "received_at": 13, "rows": [
+      {"bus": "P1", "source": "generator", "tick": 13, "voltage": 230, "available_kw": 10}
+    ]},
+    {"kind": "outage_start", "outage_id": "outage-P1", "bus": "P1", "tick": 13, "received_at": 13, "reason": "mains_lost"},
+    {"kind": "command", "id": "cmd-grid-trip", "bus": "P1", "source": "grid", "action": "open", "issued_at": 13, "received_at": 13},
+    {"kind": "receipt", "id": "rcp-grid-trip-ok", "command_id": "cmd-grid-trip", "received_at": 13, "dispatch_success": true, "dispatch_state": "executed_ok"},
+
+    {"kind": "service", "id": "svc-nB-stop-13", "node": "nB", "bus": "P1", "tick": 13, "state": "stopped", "received_at": 13, "reason": "approved_plan_a_shed_to_fit_10kw", "draw_kw": 6},
+
+    {"kind": "ticket", "ticket_id": "A-try-13", "bus": "P1", "source": "generator", "at": 13, "nodes": [["nA", 6]]},
+    {"kind": "ticket", "ticket_id": "A-try-14", "bus": "P1", "source": "generator", "at": 14, "nodes": [["nA", 6]]},
+
+    {"kind": "contact", "id": "rb-grid-physical-open-15", "bus": "P1", "source": "grid", "state": "open", "tick": 15, "received_at": 15, "welded": false},
+    {"kind": "contact", "id": "rb-gen-site-close-15", "bus": "P1", "source": "generator", "state": "closed", "tick": 15, "received_at": 15, "welded": false},
+    {"kind": "load", "id": "olm-gen-onload-15", "bus": "P1", "source": "generator", "tick": 15, "load_kw": 6, "received_at": 15, "voltage": 230, "available_kw": 10},
+    {"kind": "outage_end", "outage_id": "outage-P1", "bus": "P1", "tick": 15, "received_at": 15, "reason": "bus_energised_by_generator_nA_only"},
+
+    {"kind": "ticket", "ticket_id": "A-transfer-15", "bus": "P1", "source": "generator", "at": 15, "nodes": [["nA", 6]]},
+    {"kind": "ticket", "ticket_id": "A-expand-nB-15", "bus": "P1", "source": "generator", "at": 15, "nodes": [["nA", 6], ["nB", 6]]}
+  ],
+  "expected": {
+    "held_tickets": ["A-try-13", "A-try-14", "A-expand-nB-15"],
+    "signed_tickets": ["A-transfer-15"],
+    "signed_nodes": {"A-transfer-15": ["nA"]},
+    "nB_interruption_from": 13
+  }
+}
