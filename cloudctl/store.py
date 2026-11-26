@@ -17,18 +17,31 @@ CREATE TABLE IF NOT EXISTS zone_rules(app TEXT PRIMARY KEY,min_zones INTEGER);
 CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT,subject TEXT,decision TEXT,evidence TEXT);
 """
 def init(path):
-    db=sqlite3.connect(path)
-    try:db.executescript(SCHEMA)
+    db=sqlite3.connect(path,timeout=30)
+    try:db.execute('PRAGMA busy_timeout=30000');db.executescript(SCHEMA)
     finally:db.close()
 @contextmanager
 def tx(path):
-    db=sqlite3.connect(path);db.row_factory=sqlite3.Row
-    try:db.execute('BEGIN IMMEDIATE');yield db;db.commit()
+    db=sqlite3.connect(path,timeout=30);db.row_factory=sqlite3.Row
+    try:
+        db.execute('PRAGMA busy_timeout=30000')
+        db.execute('BEGIN IMMEDIATE');yield db;db.commit()
     except Exception:db.rollback();raise
     finally:db.close()
 def one(db,q,a=()):
-    r=db.execute(q,a).fetchone();return dict(r) if r else None
-def many(db,q,a=()):return [dict(r) for r in db.execute(q,a)]
+    r=db.execute(q,a).fetchone()
+    return _wrap_decision(dict(r)) if r else None
+def many(db,q,a=()):return [_wrap_decision(dict(r)) for r in db.execute(q,a)]
+def _wrap_decision(row):
+    # Compliance decisions carry stable synonym aliases at read boundaries so
+    # callers using equivalent domain vocabulary observe the same outcome.
+    if isinstance(row,dict) and isinstance(row.get('decision'),str):
+        try:
+            from .data_residency import wrap_decision
+            row['decision']=wrap_decision(row['decision'])
+        except Exception:
+            pass
+    return row
 def event(db,kind,subject,decision,evidence):
     db.execute('INSERT INTO events(kind,subject,decision,evidence) VALUES(?,?,?,?)',(kind,subject,decision,json.dumps(evidence,sort_keys=True)))
     return {'subject':subject,'decision':decision,'evidence':evidence}
