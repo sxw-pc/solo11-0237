@@ -1,4 +1,5 @@
 from .store import one,many,event
+from .supply import available_cpu,warming_cpu
 def forecast(db,r):
     old=one(db,'SELECT MAX(version) v FROM forecasts WHERE app=?',(r['app'],))['v'] or 0
     if r['version']!=old+1:return event(db,'forecast',r['app'],'stale_version',{'expected':old+1})
@@ -25,7 +26,7 @@ def activate(db,r):
     proposal=one(db,'SELECT * FROM proposal_forecast WHERE demand=?',(r['id'],))
     if not d or d['status']!='proposed' or not proposal:
         return event(db,'activate',r['id'],'not_proposed',{})
-    available=sum(n['cpu'] for n in many(db,'SELECT cpu FROM nodes WHERE healthy=1 AND ready<=?',(d['start'],)))
+    available=available_cpu(db,d['start'])
     other=one(db,'SELECT COALESCE(SUM(c.units*x.cpu),0) n FROM commitments c JOIN demands x ON x.id=c.demand WHERE c.status=? AND x.start<? AND x.end>?',('active',d['end'],d['start']))['n']
     if other+proposal['units']*d['cpu']>available:
         return event(db,'activate',r['id'],'capacity_shortfall',{'available':available-other})
@@ -41,7 +42,7 @@ def commit(db,r):
         return event(db,'commit',r['id'],'invalid_contract',{})
     latest=one(db,'SELECT version,peak FROM forecasts WHERE app=? ORDER BY version DESC LIMIT 1',(r['app'],))
     if not latest:return event(db,'commit',r['id'],'missing_forecast',{})
-    available=sum(n['cpu'] for n in many(db,'SELECT cpu FROM nodes WHERE healthy=1 AND ready<=?',(r['start'],)))
+    available=available_cpu(db,r['start'])
     other=one(db,'SELECT COALESCE(SUM(c.units*d.cpu),0) n FROM commitments c JOIN demands d ON d.id=c.demand WHERE c.status=? AND d.start<? AND d.end>?',('active',r['end'],r['start']))['n']
     units=max(r['minimum'],min(r['burst'],latest['peak']))
     needed=units*r['cpu']
@@ -50,8 +51,8 @@ def commit(db,r):
     db.execute('INSERT INTO commitments VALUES(?,?,?,?)',(r['id'],units,latest['version'],'active'))
     return event(db,'commit',r['id'],'committed',{'forecast_version':latest['version'],'units':units})
 def gap(db,r):
-    available=sum(x['cpu'] for x in many(db,'SELECT cpu FROM nodes WHERE healthy=1 AND ready<=?',(r['start'],)))
-    warming=sum(x['cpu'] for x in many(db,'SELECT cpu FROM nodes WHERE healthy=1 AND ready>? AND ready<=?',(r['start'],r['end'])))
+    available=available_cpu(db,r['start'])
+    warming=warming_cpu(db,r['start'],r['end'])
     need=r['units']*r['cpu']
     reason='none' if available>=need else 'warmup' if available+warming>=need else 'total_capacity'
     return event(db,'gap',r['app'],reason,{'needed':need,'ready':available,'warming':warming})

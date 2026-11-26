@@ -1,4 +1,5 @@
 from .store import one,many,event
+from .supply import node_physical_scope,physical_used_on_scope
 def zone_rule(db,r):
     if r['min_zones']<1:return event(db,'zone_rule',r['app'],'invalid',{})
     db.execute('INSERT OR REPLACE INTO zone_rules VALUES(?,?)',(r['app'],r['min_zones']))
@@ -17,6 +18,15 @@ def place(db,r):
     if len(existing)>=committed:return event(db,'place',r['demand'],'already_satisfied',{})
     used=one(db,'SELECT COALESCE(SUM(d.cpu),0) n FROM placements p JOIN demands d ON d.id=p.demand WHERE p.node=? AND p.status=?',(r['node'],'active'))['n']
     if used+demand['cpu']>node['cpu']:return event(db,'place',r['demand'],'node_capacity_exhausted',{'used':used,'capacity':node['cpu']})
+    # Entity scope: agent ids that are aliases of one proven chassis share
+    # its physical CPU, so the same silicon cannot be filled twice.
+    scope_id,scope_cpu=node_physical_scope(db,r['node'])
+    if scope_id and scope_id!=r['node']:
+        physical_used=physical_used_on_scope(db,scope_id,r['node'])
+        if physical_used+demand['cpu']>scope_cpu:
+            return event(db,'place',r['demand'],'physical_chassis_capacity_exhausted',
+                         {'chassis':scope_id,'used':physical_used,'capacity':scope_cpu,
+                          'requested':demand['cpu'],'node':r['node']})
     db.execute('INSERT INTO placements VALUES(?,?,?,?)',(r['demand'],r['node'],r['replica'],'active'))
     return event(db,'place',r['demand'],'placed',{'node':r['node'],'zone':node['zone']})
 def drain(db,r):
