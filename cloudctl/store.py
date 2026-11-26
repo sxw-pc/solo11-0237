@@ -16,9 +16,14 @@ CREATE TABLE IF NOT EXISTS drain_moves(node TEXT,generation INTEGER,demand TEXT,
 CREATE TABLE IF NOT EXISTS zone_rules(app TEXT PRIMARY KEY,min_zones INTEGER);
 CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT,subject TEXT,decision TEXT,evidence TEXT);
 """
+from .lease_capture import SCHEMA as ADDRESS_SCHEMA, _SCHEMA_VERSION
+SCHEMA = SCHEMA + '\n' + ADDRESS_SCHEMA
 def init(path):
     db=sqlite3.connect(path)
-    try:db.executescript(SCHEMA)
+    try:
+        db.executescript(SCHEMA)
+        db.execute('PRAGMA user_version=%d' % _SCHEMA_VERSION)
+        db.commit()
     finally:db.close()
 @contextmanager
 def tx(path):
