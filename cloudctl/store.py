@@ -1,6 +1,8 @@
 import json,sqlite3
 from contextlib import contextmanager
-SCHEMA="""
+from .data_recovery import RECOVERY_SCHEMA, schema as recovery_schema
+from .write_fence import FENCE_SCHEMA, schema as fence_schema
+_CORE_SCHEMA="""
 PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS demands(id TEXT PRIMARY KEY,app TEXT,start INTEGER,end INTEGER,minimum INTEGER,burst INTEGER,cpu INTEGER,version INTEGER,status TEXT);
 CREATE TABLE IF NOT EXISTS commitments(demand TEXT PRIMARY KEY,units INTEGER,forecast_version INTEGER,status TEXT);
@@ -16,9 +18,18 @@ CREATE TABLE IF NOT EXISTS drain_moves(node TEXT,generation INTEGER,demand TEXT,
 CREATE TABLE IF NOT EXISTS zone_rules(app TEXT PRIMARY KEY,min_zones INTEGER);
 CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT,subject TEXT,decision TEXT,evidence TEXT);
 """
+# Central schema also provisions the byte-continuity proof and write-fence
+# handoff tables so file-backed databases survive close/reopen (power loss).
+SCHEMA = _CORE_SCHEMA + RECOVERY_SCHEMA + FENCE_SCHEMA
 def init(path):
     db=sqlite3.connect(path)
-    try:db.executescript(SCHEMA)
+    try:
+        db.executescript(SCHEMA)
+        # Apply additive column migrations for files created by the initial
+        # cut, so a power-loss reopen sees every proof/handoff column.
+        recovery_schema(db)
+        fence_schema(db)
+        db.commit()
     finally:db.close()
 @contextmanager
 def tx(path):
